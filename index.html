@@ -523,41 +523,7 @@ function escapeHTML(value) {
     "'":"&#039;"
   })[char]);
 }
-  // ==================== PDF: СТРОКИ И КООРДИНАТЫ (С БЕЗОПАСНЫМ ДОПОЛНЕНИЕМ СТЕПЕНЕЙ) ====================
-
-function joinItemsWithScripts(items, baseLineY) {
-  const sorted = [...items].sort((a, b) => a.x - b.x);
-  let result = "";
-
-  for (let i = 0; i < sorted.length; i++) {
-    const item = sorted[i];
-    const prev = i > 0 ? sorted[i - 1] : null;
-    const dy = item.y - baseLineY;
-    
-    // Строгий порог для степеней/индексов, чтобы не цеплять соседние строки
-    const isSmaller = item.height > 0 && item.height < 9.0;
-    const isSup = dy > 2.0 && dy <= 6.0 && isSmaller;
-    const isSub = dy < -2.0 && dy >= -6.0 && isSmaller;
-
-    let needSpace = false;
-    if (prev && !isSup && !isSub) {
-      const gap = item.x - (prev.x + prev.width);
-      if (gap > 1.8) needSpace = true;
-    }
-
-    if (needSpace) result += " ";
-
-    if (isSup) {
-      result += `<sup>${item.text.trim()}</sup>`;
-    } else if (isSub) {
-      result += `<sub>${item.text.trim()}</sub>`;
-    } else {
-      result += item.text;
-    }
-  }
-
-  return normalizeText(result);
-}
+// ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
 
 function buildPageRows(items, pageNumber) {
   const usable = items
@@ -576,25 +542,54 @@ function buildPageRows(items, pageNumber) {
   const rows = [];
 
   for (const item of usable) {
-    // Точное определение базовой линии строки (сохраняем оригинальный допуск 2.8)
-    let row = rows.find(candidate => Math.abs(candidate.y - item.y) <= 2.8);
+    // Полностью возвращен твой оригинальный допуск 2.8 для группировки строк
+    let row = rows.find(candidate => Math.abs(candidate.y-item.y)<=2.8);
 
     if (!row) {
-      row = { y: item.y, baseLineY: item.y, items: [], page: pageNumber };
+      row={y:item.y,items:[],page:pageNumber};
       rows.push(row);
     }
 
     row.items.push(item);
-    row.baseLineY = row.items.reduce((sum, el) => sum + el.y, 0) / row.items.length;
-    row.y = row.baseLineY;
+    row.y=row.items.reduce((sum,element)=>sum+element.y,0)/row.items.length;
   }
 
   rows.sort((a,b)=>b.y-a.y);
 
   for (const row of rows) {
     row.items.sort((a,b)=>a.x-b.x);
-    // Используем безопасную склейку степеней внутри строки, опираясь на базовую линию
-    row.text = joinItemsWithScripts(row.items, row.baseLineY);
+    
+    // Склейка элементов строки с определением верхних/нижних индексов по Y внутри строки
+    const baseLineY = row.y;
+    let lineResult = "";
+    
+    for (let i = 0; i < row.items.length; i++) {
+      const item = row.items[i];
+      const prev = i > 0 ? row.items[i - 1] : null;
+      const dy = item.y - baseLineY;
+      
+      const isSmaller = item.height > 0 && item.height < 9.5;
+      const isSup = dy > 1.8 && dy <= 7.0 && isSmaller;
+      const isSub = dy < -1.8 && dy >= -7.0 && isSmaller;
+
+      let needSpace = false;
+      if (prev && !isSup && !isSub) {
+        const gap = item.x - (prev.x + prev.width);
+        if (gap > 1.8) needSpace = true;
+      }
+
+      if (needSpace) lineResult += " ";
+
+      if (isSup) {
+        lineResult += `<sup>${item.text.trim()}</sup>`;
+      } else if (isSub) {
+        lineResult += `<sub>${item.text.trim()}</sub>`;
+      } else {
+        lineResult += item.text;
+      }
+    }
+
+    row.text = normalizeText(lineResult);
     row.parts = splitRowIntoParts(row.items);
   }
 
@@ -763,8 +758,7 @@ function buildColumnLines(entries) {
 
     for (const line of lines) {
       line.items.sort((a,b)=>a.x-b.x);
-      // Склейка элементов внутри колонок ответов с сохранением степеней
-      line.text=joinItemsWithScripts(line.items, line.y);
+      line.text=normalizeText(line.items.map(item=>item.text).join(" "));
       line.x=Math.min(...line.items.map(item=>item.x));
       line.right=Math.max(...line.items.map(item=>item.right));
     }
@@ -774,8 +768,8 @@ function buildColumnLines(entries) {
   }
 
   return result;
-  }
-function median(values) {
+                            }
+  function median(values) {
   if (!values.length) return 0;
 
   const sorted=[...values].sort((a,b)=>a-b);
@@ -1352,7 +1346,7 @@ async function processPDF() {
   }
 }
 
-// ==================== ОТОБРАЖЕНИЕ (С КОРРЕКТНЫМ РЕНДЕРИНГОМ ТЕГОВ СТЕПЕНЕЙ) ====================
+// ==================== ОТОБРАЖЕНИЕ (С ПОДДЕРЖКОЙ ТЕГОВ СТЕПЕНЕЙ) ====================
 
 function formatMathHTML(value) {
   return escapeHTML(value)
