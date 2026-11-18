@@ -291,7 +291,6 @@ input[type=file]{display:none}
     white-space:normal;
   overflow-wrap:anywhere;
   line-height:1.5;
-}
 .empty{color:var(--muted);text-align:center;padding:28px 10px}
 .notice{font-size:13px;color:var(--muted);white-space:pre-wrap}
 .error{color:var(--red)}
@@ -357,7 +356,7 @@ pre{
 </style>
 </head>
 <body>
-  <div class="wrap">
+<div class="wrap">
   <header>
     <div class="brand">
       <svg class="brand-bell" viewBox="0 0 48 48" fill="none"
@@ -524,7 +523,7 @@ function escapeHTML(value) {
     "'":"&#039;"
   })[char]);
 }
-// ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
+  // ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
 
 function buildPageRows(items, pageNumber) {
   const usable = items
@@ -584,8 +583,7 @@ function splitRowIntoParts(items) {
       current.push(next);
     }
   }
-
-  groups.push(current);
+    groups.push(current);
 
   return groups.map(group=>({
     x:Math.min(...group.map(item=>item.x)),
@@ -799,19 +797,29 @@ function collectAnswerOptions(rows) {
     }
   }
 
+  // Привязываем маркер к ответу в той же строке и слева от маркера.
+  // В PDF маркер «правильно/учня» обычно стоит справа от текста ответа,
+  // поэтому нельзя выбирать вариант только по общей близости координат.
   for (const marker of markers) {
     let bestOption=null,bestScore=Infinity;
 
     for (const option of options) {
       const verticalDistance=Math.min(...option.lineYs.map(y=>Math.abs(y-marker.y)));
 
-      if (marker.correct && marker.x <= option.right) continue;
+      // Маркер должен находиться на той же строке (допуск на PDF-координаты).
+      if (verticalDistance>5.5) continue;
 
-      const horizontalDistance=marker.x<option.x
-        ? option.x-marker.x
-        : marker.x>option.right ? marker.x-option.right : 0;
+      // Если маркер стоит левее текста варианта, этот вариант не подходит.
+      // Небольшое пересечение допустимо: PDF может сдвигать текстовые боксы.
+      if (marker.x < option.x-3) continue;
 
-      const score=verticalDistance*5+horizontalDistance*0.25;
+      const horizontalDistance=marker.x<option.right
+        ? 0
+        : marker.x-option.right;
+
+      // Сначала совпадение по строке, затем выбираем ближайший вариант
+      // слева от метки (особенно важно для метки справа от ответа).
+      const score=verticalDistance*100+horizontalDistance;
 
       if (score<bestScore) {
         bestScore=score;
@@ -819,7 +827,7 @@ function collectAnswerOptions(rows) {
       }
     }
 
-    if (bestOption&&bestScore<180) {
+    if (bestOption) {
       bestOption.correct ||= marker.correct;
       bestOption.selected ||= marker.selected;
     }
@@ -1159,8 +1167,7 @@ async function copyShareLink() {
   setTimeout(()=>{
     $("copyShareBtn").textContent="Скопировать ссылку";
   },2200);
-}
-
+    }
 // ==================== ОСНОВНАЯ ОБРАБОТКА ====================
 
 async function processPDF() {
@@ -1316,7 +1323,8 @@ async function processPDF() {
   } finally {
     $("processBtn").disabled=false;
   }
-}// ==================== ОТОБРАЖЕНИЕ ====================
+}
+  // ==================== ОТОБРАЖЕНИЕ ====================
 
 function renderQuestion(question) {
   const answersHTML=question.answers.length
@@ -1366,7 +1374,14 @@ function renderQuestions() {
   container.innerHTML=parsedQuestions.map(renderQuestion).join("");
   applySearch();
 }
-  // ==================== ПОИСК ====================
+
+// ==================== ОБЩЕЕ КОЛИЧЕСТВО ====================
+
+function updateTotalCount() {
+  $("totalCount").textContent=parsedQuestions.length;
+}
+
+// ==================== ПОИСК ====================
 
 function applySearch() {
   const search=$("searchInput").value.trim().toLowerCase();
@@ -1406,7 +1421,8 @@ function downloadDiagnostic() {
 
   log("Диагностика сохранена.");
 }
-  // ==================== СОБЫТИЯ ====================
+
+// ==================== СОБЫТИЯ ====================
 
 $("pdfFile").addEventListener("change",event=>{
   selectedFile=event.target.files?.[0]||null;
