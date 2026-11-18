@@ -234,8 +234,8 @@ input[type=file]{display:none}
   padding:11px 14px;
   outline:none;
   box-shadow:0 1px 3px rgba(0,0,0,.025);
-  }
-  .toolbar input:focus{
+}
+.toolbar input:focus{
   border-color:var(--blue);
   box-shadow:0 0 0 3px rgba(85,185,232,.15);
 }
@@ -357,7 +357,7 @@ pre{
 </style>
 </head>
 <body>
-<div class="wrap">
+  <div class="wrap">
   <header>
     <div class="brand">
       <svg class="brand-bell" viewBox="0 0 48 48" fill="none"
@@ -524,8 +524,6 @@ function escapeHTML(value) {
     "'":"&#039;"
   })[char]);
 }
-</script>
-<script>
 // ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
 
 function buildPageRows(items, pageNumber) {
@@ -1299,4 +1297,152 @@ async function processPDF() {
       log(`Не удалось создать ссылку: ${shareError.message}`);
       setMessage(
         `Вопросы распознаны (${parsedQuestions.length}), но ссылка не создана: ${shareError.message}`,
-     
+        true
+      );
+    }
+
+    log("Обработка завершена успешно.");
+    diagnosticData.logs=[...logMessages];
+
+  } catch (error) {
+    console.error(error);
+    log(`ОШИБКА: ${error.message}`);
+    setMessage(`Ошибка: ${error.message}`,true);
+
+    if (diagnosticData) {
+      diagnosticData.logs=[...logMessages];
+    }
+
+  } finally {
+    $("processBtn").disabled=false;
+  }
+}// ==================== ОТОБРАЖЕНИЕ ====================
+
+function renderQuestion(question) {
+  const answersHTML=question.answers.length
+    ? question.answers.map(answer=>{
+        const classes=[
+          "answer",
+          answer.correct?"is-correct":"",
+          answer.selected?"is-selected":""
+        ].filter(Boolean).join(" ");
+
+        const tag=answer.correct
+          ? '<div class="answer-top"><span class="answer-tag">✓ правильна</span></div>'
+          : "";
+
+        return `<div class="${classes}">${tag}<div class="answer-body">${escapeHTML(answer.text)}</div></div>`;
+      }).join("")
+    : '<div class="notice">Варианты ответа не распознаны.</div>';
+
+  return `
+    <article
+      class="question"
+      data-status="${escapeHTML(question.status)}"
+      data-search="${escapeHTML(
+        (
+          question.text+" "+
+          question.answers.map(answer=>answer.text).join(" ")
+        ).toLowerCase()
+      )}"
+    >
+      <div class="q-head">
+        <div class="q-number">${question.number}</div>
+      </div>
+      <div class="q-text">${escapeHTML(question.text)}</div>
+      <div class="answers">${answersHTML}</div>
+    </article>
+  `;
+}
+
+function renderQuestions() {
+  const container=$("questions");
+
+  if (!parsedQuestions.length) {
+    container.innerHTML='<div class="panel empty">Вопросы не найдены.</div>';
+    return;
+  }
+
+  container.innerHTML=parsedQuestions.map(renderQuestion).join("");
+  applySearch();
+}
+  // ==================== ПОИСК ====================
+
+function applySearch() {
+  const search=$("searchInput").value.trim().toLowerCase();
+
+  document.querySelectorAll(".question").forEach(card=>{
+    const matchesSearch=!search||card.dataset.search.includes(search);
+    card.hidden=!matchesSearch;
+  });
+}
+
+// ==================== ЭКСПОРТ ДИАГНОСТИКИ ====================
+
+function downloadDiagnostic() {
+  if (!diagnosticData) {
+    setMessage("Сначала обработай PDF.",true);
+    return;
+  }
+
+  diagnosticData.logs=[...logMessages];
+
+  const blob=new Blob(
+    [JSON.stringify(diagnosticData,null,2)],
+    {type:"application/json;charset=utf-8"}
+  );
+
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+
+  link.href=url;
+  link.download="pdf-diagnostic.json";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+
+  log("Диагностика сохранена.");
+}
+  // ==================== СОБЫТИЯ ====================
+
+$("pdfFile").addEventListener("change",event=>{
+  selectedFile=event.target.files?.[0]||null;
+
+  $("fileName").textContent=selectedFile
+    ? `${selectedFile.name} · ${(selectedFile.size/1024).toFixed(1)} КБ`
+    : "Файл не выбран";
+
+  $("processBtn").disabled=!selectedFile;
+  $("debugBtn").disabled=true;
+  $("progressBar").style.width="0%";
+
+  if (selectedFile) {
+    setMessage("Файл выбран. Нажми «Обработать PDF».");
+    log(`Выбран файл: ${selectedFile.name}`);
+  }
+});
+
+$("processBtn").addEventListener("click",()=>{
+  enterFullscreen();
+  processPDF();
+});
+
+$("debugBtn").addEventListener("click",downloadDiagnostic);
+$("copyShareBtn").addEventListener("click",copyShareLink);
+$("searchInput").addEventListener("input",applySearch);
+
+// ==================== ЗАПУСК ====================
+
+log(`Программа запущена. Версия ${APP_VERSION}.`);
+
+const requestedTest=new URLSearchParams(location.search).get("test");
+
+if (requestedTest) {
+  loadSharedTest(requestedTest);
+}
+</script>
+</body>
+</html>
