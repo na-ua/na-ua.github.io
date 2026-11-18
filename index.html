@@ -376,8 +376,8 @@ function getRawAnswerItems(row) {
     return result;
   }
   return [{ text: row.text, x: 65, y: row.y, width: 0, height: 10 }];
-  }
-  function extractAnswerEntries(rows) {
+                   }
+function extractAnswerEntries(rows) {
   const entries = [], markers = [];
 
   for (const row of rows) {
@@ -612,7 +612,7 @@ function parseAllPages(pages) {
     }
   }
   return questions;
-  }
+    }
   async function enterFullscreen() {
   if (document.fullscreenElement) return;
   const root = document.documentElement;
