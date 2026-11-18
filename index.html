@@ -291,6 +291,7 @@ input[type=file]{display:none}
     white-space:normal;
   overflow-wrap:anywhere;
   line-height:1.5;
+}
 .empty{color:var(--muted);text-align:center;padding:28px 10px}
 .notice{font-size:13px;color:var(--muted);white-space:pre-wrap}
 .error{color:var(--red)}
@@ -376,7 +377,7 @@ pre{
       <h1><span class="logo-na">На</span><span class="logo-urok">Урок</span></h1>
     </div>
     <span class="logo-subtitle">Відповіді</span>
-    <div class="version">Версия 1.0.15</div>
+    <div class="version">Версия 1.0.14</div>
   </header>
 
   <section class="panel view-status" id="viewStatus">
@@ -433,9 +434,8 @@ pre{
     <details><summary>Извлечённый текст</summary><pre id="rawText">Пока пусто.</pre></details>
   </section>
 </div>
-
 <script>
-const APP_VERSION = "1.0.15";
+const APP_VERSION = "1.0.14";
 const PDFJS_VERSION = "3.11.174";
 
 const SUPABASE_URL = "https://yefjwljmgaxcnnzxsegy.supabase.co";
@@ -523,7 +523,8 @@ function escapeHTML(value) {
     "'":"&#039;"
   })[char]);
 }
-  // ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
+
+// ==================== PDF: СТРОКИ И КООРДИНАТЫ ====================
 
 function buildPageRows(items, pageNumber) {
   const usable = items
@@ -578,12 +579,13 @@ function splitRowIntoParts(items) {
 
     if (gap>threshold) {
       groups.push(current);
-            current=[next];
-                } else {
+      current=[next];
+    } else {
       current.push(next);
     }
   }
-    groups.push(current);
+
+  groups.push(current);
 
   return groups.map(group=>({
     x:Math.min(...group.map(item=>item.x)),
@@ -797,29 +799,22 @@ function collectAnswerOptions(rows) {
     }
   }
 
-  // Привязываем маркер к ответу в той же строке и слева от маркера.
-  // В PDF маркер «правильно/учня» обычно стоит справа от текста ответа,
-  // поэтому нельзя выбирать вариант только по общей близости координат.
   for (const marker of markers) {
     let bestOption=null,bestScore=Infinity;
 
     for (const option of options) {
       const verticalDistance=Math.min(...option.lineYs.map(y=>Math.abs(y-marker.y)));
+      
+      // ИСПРАВЛЕНИЕ: Игнорируем вариант, если метка находится левее варианта ответа
+      if (marker.x < option.x - 10) {
+        continue;
+      }
 
-      // Маркер должен находиться на той же строке (допуск на PDF-координаты).
-      if (verticalDistance>5.5) continue;
+      const horizontalDistance=marker.x<option.x
+        ? option.x-marker.x
+        : marker.x>option.right ? marker.x-option.right : 0;
 
-      // Если маркер стоит левее текста варианта, этот вариант не подходит.
-      // Небольшое пересечение допустимо: PDF может сдвигать текстовые боксы.
-      if (marker.x < option.x-3) continue;
-
-      const horizontalDistance=marker.x<option.right
-        ? 0
-        : marker.x-option.right;
-
-      // Сначала совпадение по строке, затем выбираем ближайший вариант
-      // слева от метки (особенно важно для метки справа от ответа).
-      const score=verticalDistance*100+horizontalDistance;
+      const score=verticalDistance*5+horizontalDistance*0.25;
 
       if (score<bestScore) {
         bestScore=score;
@@ -827,7 +822,7 @@ function collectAnswerOptions(rows) {
       }
     }
 
-    if (bestOption) {
+    if (bestOption&&bestScore<180) {
       bestOption.correct ||= marker.correct;
       bestOption.selected ||= marker.selected;
     }
@@ -873,16 +868,14 @@ function extractNumericAnswer(rows) {
   };
 }
 
-// ==================== РАЗБОР ОДНОГО ВОПРОСА ====================
-
 function parseQuestionRows(status,rows) {
   const answerStartIndex=findAnswerStartIndex(rows);
   let promptRows,answerRows;
 
   if (answerStartIndex>=0) {
     promptRows=rows.slice(0,answerStartIndex);
-        answerRows=rows.slice(answerStartIndex);
-      } else {
+    answerRows=rows.slice(answerStartIndex);
+  } else {
     promptRows=rows.slice(0,Math.min(2,rows.length));
     answerRows=rows.slice(promptRows.length);
   }
@@ -914,8 +907,6 @@ function parseQuestionRows(status,rows) {
     answers
   };
 }
-
-// ==================== ГРАНИЦЫ ВОПРОСОВ ====================
 
 function parseAllPages(pages) {
   const allRows=pages.flatMap(page=>page.rows);
@@ -960,8 +951,8 @@ function parseAllPages(pages) {
   }
 
   return questions;
-  }
-  // ==================== ПОЛНОЭКРАННЫЙ РЕЖИМ ====================
+}
+// ==================== ПОЛНОЭКРАННЫЙ РЕЖИМ ====================
 
 async function enterFullscreen() {
   if (document.fullscreenElement) return;
@@ -1167,11 +1158,12 @@ async function copyShareLink() {
   setTimeout(()=>{
     $("copyShareBtn").textContent="Скопировать ссылку";
   },2200);
-    }
+}
+
 // ==================== ОСНОВНАЯ ОБРАБОТКА ====================
 
 async function processPDF() {
-    if (!selectedFile) return;
+  if (!selectedFile) return;
 
   $("processBtn").disabled=true;
   $("debugBtn").disabled=true;
@@ -1323,8 +1315,8 @@ async function processPDF() {
   } finally {
     $("processBtn").disabled=false;
   }
-}
-  // ==================== ОТОБРАЖЕНИЕ ====================
+  }
+// ==================== ОТОБРАЖЕНИЕ ====================
 
 function renderQuestion(question) {
   const answersHTML=question.answers.length
